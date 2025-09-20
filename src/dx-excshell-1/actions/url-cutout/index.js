@@ -16,13 +16,14 @@
 
 const fetch = require('node-fetch')
 const { Core } = require('@adobe/aio-sdk')
-const { errorResponse, getBearerToken, stringParameters, checkMissingRequestInputs } = require('../utils')
-
+const { errorResponse, getBearerToken, stringParameters, checkMissingRequestInputs } = require('../utils');
+const filesLib = require('@adobe/aio-lib-files');
 
 // main function that will be executed by Adobe I/O Runtime
 async function main(params) {
   // create a Logger
-  const logger = Core.Logger('main', { level: params.LOG_LEVEL || 'info' })
+  const logger = Core.Logger('main', { level: params.LOG_LEVEL || 'info' });
+  logger.info('Params: ', params);
 
   try {
     // 'info' is the default level if not set
@@ -32,40 +33,36 @@ async function main(params) {
     logger.debug(stringParameters(params))
 
     // check for missing request input parameters and headers
-    const requiredParams = ['jobId', 'x-api-key'];
-    const requiredHeaders = ['Authorization'];
-    const errorMessage = checkMissingRequestInputs(params, requiredParams, requiredHeaders);
+    const requiredParams = ['url', 'aio_namespace', 'aio_auth']
+    const requiredHeaders = ['Authorization']
+    const errorMessage = checkMissingRequestInputs(params, requiredParams, requiredHeaders)
     if (errorMessage) {
       // return and log client errors
       return errorResponse(400, errorMessage, logger)
     }
+    const files = await filesLib.init({ ow: { namespace: params.aio_namespace, auth: params.aio_auth } });
+
+    await files.write('public/index2.html', `<h1>Hello World!</h1><img src="${params.url}" />`);
+
+    // get file url
+    const props = await files.getProperties('public/index2.html')
+    console.log('props = ', props)
 
     // extract the user Bearer token from the Authorization header
-    const token = getBearerToken(params);
-    const apiKey = params['x-api-key'];
+    // const token = getBearerToken(params)
 
     // replace this with the api you want to access
-    const apiEndpoint = `https://firefly-epo851243.adobe.io/v3/status/${params.jobId}`;
+    // const apiEndpoint = 'https://adobeioruntime.net/api/v1'
 
     // fetch content from external api endpoint
     // const res = await fetch(apiEndpoint)
-    const res = await fetch(apiEndpoint, {
-      method: 'GET',
-      headers: {
-        'x-api-key': apiKey,
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-    })
-
-    if (!res.ok) {
-      throw new Error('request to ' + apiEndpoint + ' failed with status code ' + res.status)
-    }
-    const content = await res.json();
-
+    // if (!res.ok) {
+      // throw new Error('request to ' + apiEndpoint + ' failed with status code ' + res.status)
+    // }
+    // const content = await res.json()
     const response = {
       statusCode: 200,
-      body: content
+      body: props
     }
 
     // log the response status code

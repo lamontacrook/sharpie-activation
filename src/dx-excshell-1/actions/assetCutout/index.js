@@ -17,22 +17,59 @@
 
 const fetch = require('node-fetch')
 const { Core } = require('@adobe/aio-sdk')
-const { errorResponse, getBearerToken, stringParameters, checkMissingRequestInputs } = require('../utils');
+const { errorResponse, getBearerToken, stringParameters, checkMissingRequestInputs, smartImageFileName } = require('../utils');
 const openwhisk = require('openwhisk');
 
-async function invoke(name, params) {
+async function invoke(name, params, apiKey, logger) {
 
-  // const p = {"url":"https://pre-signed-firefly-prod.s3-accelerate.amazonaws.com/images/b0d1ad3a-5125-4ba0-b298-5a6994ebe3e6?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIARDA3TX66MGQ4XHXQ%2F20250914%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20250914T210312Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=4a7cb4bc6e0600f2347003224660eb854e6ca8e0653f1354e4a063108abf4d5c",
-  //   "bucket":"firefly-upload",
-  //   "key": "uploads/lamontcrook-cutout.png",
-  //   "presignSeconds": 3600}
-
-  
-  const ow = openwhisk({ apihost, api_key, namespace }); // uses App Builder env/context
-  const res = await ow.actions.invoke({
-    name, params, blocking: true, result: true
+  const {fileName, mimeType} = await smartImageFileName(params.imageUrl);
+  logger.info('Uploading image to S3: ', params);
+  const ow = openwhisk({
+    apihost: params.apihost,
+    api_key: params.api_key, // From your .env: AIO_runtime_auth
+    namespace: '1394679-276yellowhorse-stage' // From your .env: AIO_runtime_namespace
   });
-  return res; // { success payload }
+  try {
+    const result = await ow.actions.invoke({
+      name: 'dx-excshell-1/upload-url-to-s3',
+      params: {
+        url: params.imageUrl,
+        bucket: "firefly-upload",
+        key: `uploads/${Date.now()}-${fileName}`,
+        region: params.region,
+        public: true,
+        contentType: mimeType,
+        cacheSeconds: 3600,
+        sse: true,
+        timeoutMs: 60000,
+        AWS_ACCESS_KEY_ID: params.AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY: params.AWS_SECRET_ACCESS_KEY
+      },
+      blocking: true // Wait for result
+    });
+
+    console.log('Action result:', result.response.result);
+    return result.response.result;
+  } catch (error) {
+    console.error('Action failed:', error);
+    throw error;
+  }
+}
+
+async function saveAsset(name, params, logger) {
+  const {fileName, mimeType} = await smartImageFileName(params.imageUrl);
+  logger.info('Uploading image to S3: ', params);
+  const ow = openwhisk({
+    apihost: params.AIO_RT_APIHOST,
+    api_key: params.AIO_RT_AUTH, // From your .env: AIO_runtime_auth
+    namespace: params.AIO_RT_NAMESPACE // From your .env: AIO_runtime_namespace
+  });
+
+  params.fileName = fileName;
+  params.mimeType = mimeType;
+  const result = await ow.actions.invoke({name, params: params, blocking: true});
+  logger.info('Successfully invoked image-writer action ', result.response.result.body.publicUrl);
+  return result.response.result.body.publicUrl;
 }
 
 // main function that will be executed by Adobe I/O Runtime
@@ -45,15 +82,12 @@ async function main(params) {
     logger.info('Calling the main action')
 
     // log parameters, only if params.LOG_LEVEL === 'debug'
-    logger.debug(stringParameters(params));
-    logger.info('--------------------------------');
-    logger.info(params);
+    // logger.debug(stringParameters(params));
+    // logger.info('--------------------------------');
+    // logger.info(params);
 
     // check for missing request input parameters and headers
     const requiredParams = ['imageUrl'];
-
-    const s3 = invoke('upload-url-to-s3', params);
-    return s3;
 
     const requiredHeaders = ['Authorization', 'x-api-key']
     const errorMessage = checkMissingRequestInputs(params, requiredParams, requiredHeaders)
@@ -65,12 +99,33 @@ async function main(params) {
     // extract the user Bearer token from the Authorization header
     const token = getBearerToken(params);
     const apiKey = params['__ow_headers']['x-api-key'];
-    logger.info('API Key: ', apiKey);
+    // logger.info('API Key: ', apiKey);
     // get API key from environment
     // const apiKey = params.SERVICE_API_KEY || process.env.SERVICE_API_KEY
     if (!apiKey) {
       return errorResponse(400, 'SERVICE_API_KEY is required', logger)
     }
+
+    let s3Url;
+    try {
+      // const result = await invoke('upload-url-to-s3', params, apiKey, logger);
+      //const result = await saveAsset('dx-excshell-1/image-writer', params, logger);
+      // logger.info('Successfully invoked upload-url-to-s3 action ', result);
+     
+      s3Url = params.imageUrl; //JSON.parse(result.body).publicUrl;
+      // return {
+      //   statusCode: 200,
+      //   body: {
+      //     success: true,
+      //     result: result,
+      //     message: 'Successfully processed upload request'
+      //   }
+      // };
+    } catch (invokeError) {
+      logger.error('Error invoking upload-url-to-s3 action:', invokeError);
+      return errorResponse(500, `Failed to invoke upload action: ${invokeError.message}`, logger);
+    }
+    ///----
 
     // Adobe Photoshop API endpoint for background removal
     const apiEndpoint = 'https://image.adobe.io/v2/remove-background'
@@ -78,7 +133,7 @@ async function main(params) {
     const requestBody = {
       "image": {
         "source": {
-          "url": params.imageUrl
+          "url": s3Url
         }
       },
       "mode": "cutout",

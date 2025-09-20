@@ -16,7 +16,7 @@ runtimeManifest:
           inputs:
             LOG_LEVEL: debug
           annotations:
-            require-adobe-auth: true
+            require-adobe-auth: false
             final: true
         assetCutout:
           function: actions/assetCutout/index.js
@@ -24,18 +24,22 @@ runtimeManifest:
           runtime: nodejs:22
           inputs:
             LOG_LEVEL: debug
+            AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+            AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+            region: $AWS_REGION
+            aio_auth: $AIO_RT_AUTH
+            aio_namespace: $AIO_RT_NAMESPACE
+            apihost: $AIO_runtime_apihost
           annotations:
             require-adobe-auth: true
             final: true
+            provide-api-key: true
         upload-url-to-s3:
           function: actions/upload-url-to-s3/index.js
           web: 'yes'
           runtime: nodejs:22
           inputs:
             LOG_LEVEL: debug
-            AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
-            AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
-            region: $AWS_REGION
           annotations:
             require-adobe-auth: false
             final: true
@@ -45,6 +49,53 @@ runtimeManifest:
           runtime: nodejs:22
           inputs:
             LOG_LEVEL: debug
+            x-api-key: $AIO_API_KEY
+          annotations:
+            require-adobe-auth: true
+            final: true
+        url-cutout:
+          function: actions/url-cutout/index.js
+          web: 'yes'
+          runtime: nodejs:22
+          inputs:
+            LOG_LEVEL: debug
+            aio_auth: $AIO_RT_AUTH
+            aio_namespace: $AIO_RT_NAMESPACE
+          annotations:
+            require-adobe-auth: true
+            final: true
+        image-writer:
+          function: actions/image-writer/index.js
+          web: 'yes'
+          runtime: nodejs:22
+          inputs:
+            LOG_LEVEL: debug
+            aio_auth: $AIO_RT_AUTH
+            aio_namespace: $AIO_RT_NAMESPACE
+          annotations:
+            require-adobe-auth: true
+            final: true
+        normalize:
+          function: actions/normalize/index.js
+          web: 'yes'
+          runtime: nodejs:22
+          inputs:
+            LOG_LEVEL: debug
+            aio_auth: $AIO_RT_AUTH
+            aio_namespace: $AIO_RT_NAMESPACE
+          annotations:
+            require-adobe-auth: false
+            final: true
+        cutout-asset:
+          function: actions/cutout-asset/index.js
+          web: 'yes'
+          runtime: nodejs:22
+          inputs:
+            LOG_LEVEL: debug
+            x-api-key: $AIO_API_KEY
+            aio_auth: $AIO_RT_AUTH
+            aio_namespace: $AIO_RT_NAMESPACE
+            aio_apihost: $AIO_RT_APIHOST
           annotations:
             require-adobe-auth: true
             final: true

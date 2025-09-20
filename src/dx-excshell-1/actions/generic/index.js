@@ -32,7 +32,7 @@ async function main (params) {
 
     // check for missing request input parameters and headers
     const requiredParams = [/* add required params */]
-    const requiredHeaders = ['Authorization']
+    const requiredHeaders = [];
     const errorMessage = checkMissingRequestInputs(params, requiredParams, requiredHeaders)
     if (errorMessage) {
       // return and log client errors
